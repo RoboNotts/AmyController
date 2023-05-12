@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+  <link rel="stylesheet" href="{{ url_for("static", path="/css/bootstrap-5_2_3.min.css") }}" />
+  <link rel="stylesheet" href="{{ url_for("static", path="/css/font-awesome-6_4_0.min.css") }}" />
+  <link rel="stylesheet" href="{{ url_for("static", path="/css/custom.css") }}">
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400&display=swap');
+
+  </style>
+
+  <title>{{ robot_name }} W.O.Z.</title>
+
+</head>
+
+<body>
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-2 header p5 bg-dark text-white text-center">
+      </div>
+      <div class="col-8 header p5 bg-dark text-white text-center">
+        <h1>{{ robot_name }} <i class="fas fa-robot robot pr-4 pl-4 mb-2"></i> W.O.Z.</h1>
+      </div>
+      <div class="col-2 header p5 bg-dark text-white text-left">
+        <button type="button" class="btn btn-dark">
+          <i class="fa-solid fa-computer pr-2"></i>
+          Status: <span class="ml-2 connection-status badge badge-danger">Offline</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+    <div class="row justify-content-left">
+      <div class="col-10 p-1">
+        <div class="card mt-2">
+          <div class="card-header visuals text-center">
+            <i class="fa-solid fa-map pr-2"></i>
+            SLAM
+          </div>
+          <div class="row">
+            <div class="col">
+              <div id="map-container" class=""></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-2 p-1">
+        <div class="row">
+          <div class="col-12">
+            <div class="card mt-2">
+              <div class="card-header visuals text-center">
+                <i class="fa-solid fa-map pr-2"></i>
+                Mapping
+              </div>
+              <div class="row text-center">
+                <div class="col">
+                  <div class="list-group maps">
+                    <button class="list-group-item list-group-item-action map-clear">Clear Map</button>
+                    <button class="list-group-item list-group-item-action map-load">Load Map</button>
+                    <button class="list-group-item list-group-item-action map-save">Save Map</button>
+                    <button class="list-group-item list-group-item-action map-localise">Localise</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-12">
+            <div class="card mt-2">
+              <div class="card-header visuals text-center">
+                <i class="fa-solid fa-map pr-2"></i>
+                Actions
+              </div>
+              <div class="row text-center">
+                <div class="col">
+                  <div class="list-group goals">
+                    <button class="list-group-item list-group-item-action action-stop">STOP</button>
+                    <button class="list-group-item list-group-item-action action-home">Go Home</button>
+                    <button class="list-group-item list-group-item-action action-charge">Charge</button>
+                    <button class="list-group-item list-group-item-action action-map">Enable Mapping</button>
+                    <button class="list-group-item list-group-item-action action-nav">Enable Navigation</button>
+                  </div>
+                  <div class="list-group locations">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/roslibjs/1.1.0/roslib.min.js"
+      crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"
+      crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-throttle-debounce/1.1/jquery.ba-throttle-debounce.min.js"
+      crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.3/js/bootstrap.min.js"
+      crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="/static/js/eventemitter2.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/EaselJS/1.0.2/easeljs.min.js"
+      crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script type="text/javascript" src="/static/js/ros2d.js"></script>
+    <script type="text/javascript" src="/static/js/nav2d.js"></script>
+
+    <script>
+      jQuery(function ($) {
+        var map_con = $("#map-container");
+        map_con.height(($(window).height() - map_con.offset().top) * 0.98);
+        var viewer = new ROS2D.Viewer({
+          divID: 'map-container',
+          width: map_con.width(),
+          height: map_con.height()
+        });
+        var host = "10.0.1.4"; // window.location.hostname
+        var ws_url = "ws://" + host + ":9091";
+        window.ros = new ROSLIB.Ros({
+          url: ws_url,
+        });
+        ros.on("connection", function () {
+          console.log("Connected to websocket server.");
+          $(".connection-status").addClass("badge-success");
+          $(".connection-status").removeClass("badge-danger");
+          $(".connection-status").html("Connected");
+        });
+        ros.on("error", function (error) {
+          console.log("Error connecting to websocket server: ", error);
+          $(".connection-status").addClass("badge-danger");
+          $(".connection-status").removeClass("badge-success");
+          $(".connection-status").html("Offline");
+        });
+        ros.on("close", function () {
+          console.log("Connection to websocket server closed.");
+          $(".connection-status").addClass("badge-danger");
+          $(".connection-status").removeClass("badge-success");
+          $(".connection-status").html("Offline");
+        });
+        $(".connection-status").on("click", function () {
+          window.ros.connect(ws_url);
+        });
+
+        var gridClient = new ROS2D.OccupancyGridClient({
+          ros: window.ros,
+          rootObject: viewer.scene,
+          topic: "/map",
+          continuous: true,
+        });
+        var old_state = {
+          width: 0,
+          height: 0,
+          x: 0,
+          y: 0,
+        };
+        gridClient.on('change', function () {
+          currentGrid = gridClient.currentGrid;
+          if (old_state.width !== currentGrid.width || old_state.height !== currentGrid.height) {
+            viewer.scaleToDimensions(currentGrid.width, currentGrid.height);
+            old_state.width = currentGrid.width;
+            old_state.height = currentGrid.height;
+          }
+          if (old_state.x !== currentGrid.pose.position.x || old_state.y !== currentGrid.pose.position.y) {
+            viewer.shift(gridClient.currentGrid.pose.position.x, gridClient.currentGrid.pose.position.y);
+            old_state.x = currentGrid.pose.position.x;
+            old_state.y = currentGrid.pose.position.y;
+          }
+        });
+
+        var robotMarker = new ROS2D.NavigationImage({
+          size: 1,
+          image: "/static/media/robot.png",
+          // <a href="https://www.flaticon.com/free-icons/robot" title="robot icons">Robot icons created by Freepik - Flaticon</a>
+          pulse: true
+        });
+        robotMarker.visible = false;
+        viewer.scene.addChild(robotMarker);
+        var tfClient = new ROSLIB.TFClient({
+          ros : window.ros,
+          fixedFrame : 'map',
+          angularThres : 0.01,
+          transThres : 0.01
+        });
+        tfClient.subscribe('base_link', function(tf) {
+          robotMarker.x = tf.translation.x;
+          robotMarker.y = -tf.translation.y;
+          robotMarker.rotation = viewer.scene.rosQuaternionToGlobalTheta(tf.rotation);
+          robotMarker.visible = true;
+        });
+        var moveActionClient = new ROSLIB.ActionClient({
+          ros : ros,
+          serverName : '/move_base',
+          actionName : 'move_base_msgs/MoveBaseAction'
+        });
+
+        var startCoords = null;
+        viewer.scene.addEventListener("stagemousedown", function (event) {
+          startCoords = viewer.scene.globalToRos(event.stageX, event.stageY);
+        });
+        viewer.scene.addEventListener("stagemouseup", function (event) {
+          if (startCoords == null) {
+            return;
+          }
+          var endCoords = viewer.scene.globalToRos(event.stageX, event.stageY);
+          var xDelta = endCoords.x - startCoords.x;
+          var yDelta = endCoords.y - startCoords.y;
+          var thetaRadians = Math.atan2(xDelta, yDelta);
+          if (thetaRadians >= 0 && thetaRadians <= Math.PI) {
+            thetaRadians += (3 * Math.PI / 2);
+          } else {
+            thetaRadians -= (Math.PI / 2);
+          }
+          var qz = Math.sin(-thetaRadians / 2.0);
+          var qw = Math.cos(-thetaRadians / 2.0);
+          var goal = new ROSLIB.Goal({
+            actionClient : moveActionClient,
+            goalMessage : {
+              target_pose : {
+                header : {
+                  frame_id : '/map'
+                },
+                pose : {
+                  position: startCoords,
+                  orientation: {
+                    x: 0.0,
+                    y: 0.0,
+                    z: qz,
+                    w: qw,
+                  },
+                }
+              }
+            }
+          });
+          goal.send();
+
+        });
+        startCoords = null;
+
+      });
+    </script>
+
+
+</body>
+
+</html>
