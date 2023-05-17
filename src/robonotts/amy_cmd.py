@@ -1,6 +1,12 @@
+import asyncio
 import socket
 
-def send_map_start_cmd(address: str, port: int):
+from starlette.responses import PlainTextResponse
+
+
+async def amy_cmd_proxy(request):
+    address = "10.42.0.1"
+    port = 12306
     with socket.create_connection((address, port)) as sock:
-        sock.send("#MAPO")
-        sock.send("#NAVS")
+        sock.send(request.query_params.get("cmd").encode("ASCII"))
+        return PlainTextResponse(sock.recv(4096).decode("ASCII"))

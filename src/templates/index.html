@@ -10,8 +10,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
 
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400&display=swap');
-
+    @import url({{ url_for("static", path="/css/fonts.css") }});
   </style>
 
   <title>{{ robot_name }} W.O.Z.</title>
@@ -19,6 +18,17 @@
 </head>
 
 <body>
+
+  <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-autohide="false" style="position: absolute; top: 0; right: 0;">
+    <div class="toast-header">
+      <strong class="me-auto"></strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body">
+
+    </div>
+  </div>
+
   <div class="container-fluid">
     <div class="row">
       <div class="col-2 header p5 bg-dark text-white text-center">
@@ -56,15 +66,18 @@
             <div class="card mt-2">
               <div class="card-header visuals text-center">
                 <i class="fa-solid fa-map pr-2"></i>
-                Mapping
+                Actions
               </div>
               <div class="row text-center">
                 <div class="col">
                   <div class="list-group maps">
-                    <button class="list-group-item list-group-item-action map-clear">Clear Map</button>
-                    <button class="list-group-item list-group-item-action map-load">Load Map</button>
-                    <button class="list-group-item list-group-item-action map-save">Save Map</button>
-                    <button class="list-group-item list-group-item-action map-localise">Localise</button>
+                    <button class="list-group-item list-group-item-action action-dock">Dock</button>
+                    <button class="list-group-item list-group-item-action action-cancel-dock">Cancel Dock</button>
+                    <button class="list-group-item list-group-item-action action-start-mapping">Start Mapping</button>
+                    <button class="list-group-item list-group-item-action action-save-map">Save Map</button>
+                    <button class="list-group-item list-group-item-action action-stop-mapping">Stop Mapping</button>
+                    <button class="list-group-item list-group-item-action action-start-navigation">Start Navigating</button>
+                    <button class="list-group-item list-group-item-action action-add-location">Add Location</button>
                   </div>
                 </div>
               </div>
@@ -76,18 +89,12 @@
             <div class="card mt-2">
               <div class="card-header visuals text-center">
                 <i class="fa-solid fa-map pr-2"></i>
-                Actions
+                Locations
               </div>
               <div class="row text-center">
                 <div class="col">
-                  <div class="list-group goals">
-                    <button class="list-group-item list-group-item-action action-stop">STOP</button>
-                    <button class="list-group-item list-group-item-action action-home">Go Home</button>
-                    <button class="list-group-item list-group-item-action action-charge">Charge</button>
-                    <button class="list-group-item list-group-item-action action-map">Enable Mapping</button>
-                    <button class="list-group-item list-group-item-action action-nav">Enable Navigation</button>
-                  </div>
                   <div class="list-group locations">
+
                   </div>
                 </div>
               </div>
@@ -97,22 +104,18 @@
       </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/roslibjs/1.1.0/roslib.min.js"
-      crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"
-      crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-throttle-debounce/1.1/jquery.ba-throttle-debounce.min.js"
-      crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.3/js/bootstrap.min.js"
-      crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="/static/js/eventemitter2.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/EaselJS/1.0.2/easeljs.min.js"
-      crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script type="text/javascript" src="/static/js/ros2d.js"></script>
-    <script type="text/javascript" src="/static/js/nav2d.js"></script>
+    <script type="text/javascript" src="{{ url_for("static", path="/js/roslib.min.js") }}"></script>
+    <script type="text/javascript" src="{{ url_for("static", path="/js/jquery.min.js") }}"></script>
+    <script type="text/javascript" src="{{ url_for("static", path="/js/jquery.ba-throttle-debounce.min.js") }}"></script>
+    <script type="text/javascript" src="{{ url_for("static", path="/js/bootstrap.min.js") }}"></script>
+    <script type="text/javascript" src="{{ url_for("static", path="/js/eventemitter2.js") }}"></script>
+    <script type="text/javascript" src="{{ url_for("static", path="/js/easeljs.min.js") }}"></script>
+    <script type="text/javascript" src="{{ url_for("static", path="/js/ros2d.js") }}"></script>
+    <script type="text/javascript" src="{{ url_for("static", path="/js/nav2d.js") }}"></script>
 
     <script>
       jQuery(function ($) {
+        var locations = [];
         var map_con = $("#map-container");
         map_con.height(($(window).height() - map_con.offset().top) * 0.98);
         var viewer = new ROS2D.Viewer({
@@ -120,8 +123,7 @@
           width: map_con.width(),
           height: map_con.height()
         });
-        var host = "10.0.1.4"; // window.location.hostname
-        var ws_url = "ws://" + host + ":9091";
+        var ws_url = "ws://{{ rosbridge_host }}:{{ rosbridge_port }}";
         window.ros = new ROSLIB.Ros({
           url: ws_url,
         });
@@ -187,12 +189,15 @@
           angularThres : 0.01,
           transThres : 0.01
         });
+        var lastcoords = null;
         tfClient.subscribe('base_link', function(tf) {
           robotMarker.x = tf.translation.x;
           robotMarker.y = -tf.translation.y;
           robotMarker.rotation = viewer.scene.rosQuaternionToGlobalTheta(tf.rotation);
           robotMarker.visible = true;
+          lastcoords = tf;
         });
+
         var moveActionClient = new ROSLIB.ActionClient({
           ros : ros,
           serverName : '/move_base',
@@ -240,11 +245,95 @@
           goal.send();
 
         });
-        startCoords = null;
+
+        var dockTopic = new ROSLIB.Topic({
+          ros : ros,
+          name : "/CmdAutoDock",
+          messageType : "std_msgs/Int32"
+        });
+
+        $(".action-dock").click(() => {
+          var msg = new ROSLIB.Message({
+            data: 1
+          });
+          dockTopic.publish(msg);
+        });
+
+        $(".action-cancel-dock").click(() => {
+          var msg = new ROSLIB.Message({
+            data: 0
+          });
+          dockTopic.publish(msg);
+        });
+
+        $(".action-start-mapping").click(() => {
+          $(".toast").toast({autohide: false});
+          $(".toast-body").text("Starting mapping...")
+          $(".toast").toast("show");
+          $.get("http://localhost:8000/amy_cmd", {
+            cmd: "#MAPO"
+          }, (r) => {
+            var msg = "unknown";
+            if (r == "#MAPF") {
+              msg = "wait for mapping module time out!";
+            } else {
+              msg = "you have opened the mapping.";
+            }
+            $(".toast-body").text("Response: " + msg);
+            $(".toast").toast("show");
+          });
+        });
+
+        $(".action-save-map").click(() => {
+          $(".toast").toast({autohide: false});
+          $(".toast-body").text("Saving map...")
+          $(".toast").toast("show");
+          $.get("http://localhost:8000/amy_cmd", {
+            cmd: "#SMAP"
+          }, (r) => {
+            $(".toast-body").text("Response: " + r);
+            $(".toast").toast("show");
+          });
+        });
+
+        $(".action-stop-mapping").click(() => {
+          $(".toast").toast({autohide: false});
+          $(".toast-body").text("Stop mapping...")
+          $(".toast").toast("show");
+          $.get("http://localhost:8000/amy_cmd", {
+            cmd: "#QMAP"
+          }, (r) => {
+            $(".toast-body").text("Response: " + r);
+            $(".toast").toast("show");
+          });
+        });
+
+        $(".action-start-navigation").click(() => {
+          $(".toast").toast({autohide: false});
+          $(".toast-body").text("Starting navigation...")
+          $(".toast").toast("show");
+          $.get("http://localhost:8000/amy_cmd", {
+            cmd: "#NAVS"
+          }, (r) => {
+            $(".toast-body").text("Response: " + r);
+            $(".toast").toast("show");
+          });
+        });
+
+        $(".action-add-location").click(() => {
+          var data = {
+            position: lastcoords.translation,
+            orientation: lastcoords.rotation,
+          }
+          var name = window.prompt("Enter a location name");
+          locations.push({name: name, location: data});
+          var div = $(document.createElement("div"));
+          div.text(name);
+          $(".locations").append(div);
+        })
 
       });
     </script>
-
 
 </body>
 
